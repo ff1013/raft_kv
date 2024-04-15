@@ -13,6 +13,8 @@ import (
 	"log"
 	"math/rand"
 	"raft_kv_backend/gob_check"
+	"raft_kv_backend/network"
+
 	"raft_kv_backend/labrpc"
 	"runtime"
 	"sync"
@@ -291,7 +293,7 @@ func (cfg *config) start1(i int, applier func(int, chan ApplyMsg)) {
 
 	// a fresh set of ClientEnds.
 	//一组新的ClientEnds
-	ends := make([]*labrpc.ClientEnd, cfg.n)
+	ends := make([]network.ClientEnd, cfg.n)
 	for j := 0; j < cfg.n; j++ {
 		ends[j] = cfg.net.MakeEnd(cfg.endnames[i][j])
 		cfg.net.Connect(cfg.endnames[i][j], j)
