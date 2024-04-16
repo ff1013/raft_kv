@@ -82,9 +82,9 @@ func (rf *Raft) appendEntries() {
 	}
 }
 
-func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply) { //Follower回复AE消息
+func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply) error { //Follower回复AE消息
 	if rf.killed() {
-		return
+		return nil
 	}
 	rf.mu.Lock()
 	defer rf.mu.Unlock()
@@ -95,7 +95,7 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 		reply.Term = rf.currentTerm
 		reply.Success = false
 		LPrintf("[%v认为Leader过期了]此时%v的任期是%v,发来的Leader%v任期是:%v",rf.me,rf.me,rf.currentTerm,args.LeaderId,args.Term)
-		return
+		return nil
 	}
 
 	//根据AE消息更新基本信息(心跳相关)
@@ -113,7 +113,7 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 			prevLogTerm = rf.lastLogTerm
 		} else { // args.PrevLogIndex < rf.lastLogIndex 已经被包含
 			reply.Success = true
-			return
+			return nil
 		}
 	}
 	//根据AE消息更新日志
@@ -138,7 +138,7 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 			}
 			LPrintf("[快速更新]前置日志任期不一致")
 		}
-		return
+		return nil
 	} else { 
 	//同意加日志
 		if len(args.Entries) != 0 { // 不是心跳
@@ -175,7 +175,7 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 			LPrintf("[%v成功附加日志] arg:%+v,----rf.logs:%v \n", rf.me, args, rf.log)
 		}
 	}
-	
+	return nil
 }
 
 func (rf *Raft) sendAppendEntries(server int, args *AppendEntriesArgs, reply *AppendEntriesReply) bool {

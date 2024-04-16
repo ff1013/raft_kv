@@ -5,12 +5,12 @@ import (
 	"math/big"
 	"sync"
 
-	"raft_kv_backend/labrpc"
+	"raft_kv_backend/network"
 )
 
 
 type Clerk struct {
-	servers []*labrpc.ClientEnd // 所有服务器
+	servers []network.ClientEnd // 所有服务器
 	// You will have to modify this struct.
 	mu sync.Mutex // 锁
 	leaderId int // Leader的id
@@ -25,7 +25,7 @@ func nrand() int64 {
 	return x
 }
 
-func MakeClerk(servers []*labrpc.ClientEnd) *Clerk {
+func MakeClerk(servers []network.ClientEnd) *Clerk {
 	ck := new(Clerk)
 	ck.servers = servers
 	// You'll have to add code here.
@@ -89,7 +89,7 @@ func (ck *Clerk) Get(key string) string {
 // must match the declared types of the RPC handler function's
 // arguments. and reply must be passed as a pointer.
 //
-func (ck *Clerk) PutAppend(key string, value string, op string) {
+func (ck *Clerk) PutAppend(key string, value string, op string) string {
 	// You will have to modify this function.
 	serverNum := len(ck.servers) // 服务器数量
 	ck.lastAppliedCommandId++
@@ -111,15 +111,15 @@ func (ck *Clerk) PutAppend(key string, value string, op string) {
 		// 发送成功
 		ck.leaderId = serverId
 		ck.lastAppliedCommandId++
-		return 
+		return "ok"
 	}
 }
 
-func (ck *Clerk) Put(key string, value string) {
+func (ck *Clerk) Put(key string, value string) string {
 	// DPrintf("[客户端调用请求]%v请求Put, key:%v, value:%v", ck.clientId, key, value)
-	ck.PutAppend(key, value, "Put")
+	return ck.PutAppend(key, value, "Put")
 }
-func (ck *Clerk) Append(key string, value string) {
+func (ck *Clerk) Append(key string, value string) string {
 	// DPrintf("[客户端调用请求]%v请求Append, key:%v, value:%v", ck.clientId, key, value)
-	ck.PutAppend(key, value, "Append")
+	return ck.PutAppend(key, value, "Append")
 }

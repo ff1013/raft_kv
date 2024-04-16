@@ -26,6 +26,7 @@ import (
 
 	"raft_kv_backend/gob_check"
 	"raft_kv_backend/network"
+	"raft_kv_backend/persist"
 )
 
 //每个节点的角色
@@ -71,7 +72,7 @@ type ApplyMsg struct {
 type Raft struct {
 	mu        sync.Mutex          // Lock to protect shared access to this peer's state
 	peers     []network.ClientEnd // RPC end points of all peers 所有peers的RPC端点
-	persister *Persister          // Object to hold this peer's persisted state 用于保持此对等方的持久化状态的对象
+	persister persist.Persister   // Object to hold this peer's persisted state 用于保持此对等方的持久化状态的对象
 	me        int                 // this peer's index into peers[]
 	dead      int32               // set by Kill()
 
@@ -302,7 +303,7 @@ func (rf *Raft) ticker() { // 开始选举/附加日志
 // for any long-running work.
 //
 func Make(peers []network.ClientEnd, me int,
-	persister *Persister, applyCh chan ApplyMsg) *Raft {
+	persister persist.Persister, applyCh chan ApplyMsg) *Raft {
 	rf := &Raft{}
 	rf.peers = peers
 	rf.persister = persister

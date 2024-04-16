@@ -3,7 +3,9 @@ package kvraft
 import (
 	"os"
 	"raft_kv_backend/labrpc"
+	"raft_kv_backend/leveldb_persist"
 	"raft_kv_backend/network"
+	"raft_kv_backend/persist"
 	"testing"
 
 	// import "log"
@@ -12,7 +14,8 @@ import (
 	"fmt"
 	"math/big"
 	"math/rand"
-	"raft_kv_backend/raft"
+
+	// "raft_kv_backend/raft"
 	"runtime"
 	"sync"
 	"sync/atomic"
@@ -34,8 +37,8 @@ func makeSeed() int64 {
 }
 
 // Randomize server handles
-func random_handles(kvh []*labrpc.ClientEnd) []*labrpc.ClientEnd {
-	sa := make([]*labrpc.ClientEnd, len(kvh))
+func random_handles(kvh []network.ClientEnd) []network.ClientEnd {
+	sa := make([]network.ClientEnd, len(kvh))
 	copy(sa, kvh)
 	for i := range sa {
 		j := rand.Intn(i + 1)
@@ -50,7 +53,7 @@ type config struct {
 	net          *labrpc.Network
 	n            int
 	kvservers    []*KVServer
-	saved        []*raft.Persister
+	saved        []persist.Persister
 	endnames     [][]string // names of each server's sending ClientEnds
 	clerks       map[*Clerk][]string
 	nextClientId int
@@ -196,7 +199,7 @@ func (cfg *config) makeClient(to []int) *Clerk {
 	defer cfg.mu.Unlock()
 
 	// a fresh set of ClientEnds.
-	ends := make([]*labrpc.ClientEnd, cfg.n)
+	ends := make([]network.ClientEnd, cfg.n)
 	endnames := make([]string, cfg.n)
 	for j := 0; j < cfg.n; j++ {
 		endnames[j] = randstring(20)
@@ -311,14 +314,14 @@ func (cfg *config) StartServer(i int) {
 	if cfg.saved[i] != nil {
 		cfg.saved[i] = cfg.saved[i].Copy()
 	} else {
-		cfg.saved[i] = raft.MakePersister()
+		cfg.saved[i] = leveldb_persist.Makeleveldb_persister()
 	}
 	cfg.mu.Unlock()
 
 	cfg.kvservers[i] = StartKVServer(ends, i, cfg.saved[i], cfg.maxraftstate)
 
 	kvsvc := labrpc.MakeService(cfg.kvservers[i])
-	rfsvc := labrpc.MakeService(cfg.kvservers[i].rf)
+	rfsvc := labrpc.MakeService(cfg.kvservers[i].Rf)
 	srv := labrpc.MakeServer()
 	srv.AddService(kvsvc)
 	srv.AddService(rfsvc)
@@ -330,7 +333,7 @@ func (cfg *config) Leader() (bool, int) {
 	defer cfg.mu.Unlock()
 
 	for i := 0; i < cfg.n; i++ {
-		_, is_leader := cfg.kvservers[i].rf.GetState()
+		_, is_leader := cfg.kvservers[i].Rf.GetState()
 		if is_leader {
 			return true, i
 		}
@@ -373,7 +376,7 @@ func make_config(t *testing.T, n int, unreliable bool, maxraftstate int) *config
 	cfg.net = labrpc.MakeNetwork()
 	cfg.n = n
 	cfg.kvservers = make([]*KVServer, cfg.n)
-	cfg.saved = make([]*raft.Persister, cfg.n)
+	cfg.saved = make([]persist.Persister, cfg.n)
 	cfg.endnames = make([][]string, cfg.n)
 	cfg.clerks = make(map[*Clerk][]string)
 	cfg.nextClientId = cfg.n + 1000 // client ids start 1000 above the highest serverid

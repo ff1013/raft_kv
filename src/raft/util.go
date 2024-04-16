@@ -4,7 +4,7 @@ import "log"
 
 // Debugging
 
-const all = false // 一键关闭日志
+const all = true // 一键关闭日志
 
 const Debug = true && all // 持久化
 func DPrintf(format string, a ...interface{}) (n int, err error) {

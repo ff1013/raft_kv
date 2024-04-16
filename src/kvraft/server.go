@@ -9,6 +9,7 @@ import (
 
 	"raft_kv_backend/gob_check"
 	"raft_kv_backend/network"
+	"raft_kv_backend/persist"
 	"raft_kv_backend/raft"
 )
 
@@ -53,7 +54,7 @@ type IndexTerm struct {
 type KVServer struct {
 	mu      sync.Mutex
 	me      int
-	rf      *raft.Raft
+	Rf      *raft.Raft
 	applyCh chan raft.ApplyMsg
 	dead    int32 // set by Kill()
 
@@ -81,7 +82,7 @@ func (kv *KVServer) getApplyReplyChan(index int, term int) chan Response {
 }
 
 // get操作
-func (kv *KVServer) Get(args *GetArgs, reply *GetReply) {
+func (kv *KVServer) Get(args *GetArgs, reply *GetReply) error {
 	DPrintf("[收到Get请求]server:%v请求key:%v", kv.me, args.Key)
 	// Your code here.
 	// 发往raft参数设置
@@ -97,10 +98,11 @@ func (kv *KVServer) Get(args *GetArgs, reply *GetReply) {
 	//DPrintf("调用下层函数")
 	reply.Err, reply.Value = response.Err, response.Value
 	DPrintf("raft回复get请求结果:%v", reply.Value)
+	return nil
 }
 
 // put/append操作
-func (kv *KVServer) PutAppend(args *PutAppendArgs, reply *PutAppendReply) {
+func (kv *KVServer) PutAppend(args *PutAppendArgs, reply *PutAppendReply) error {
 	// Your code here.
 	// 发往raft参数设置
 	DPrintf("[收到%v请求]server:%v请求key:%v, value:%v, commandId:%v", args.Op, kv.me, args.Key, args.Value, args.CommandId)
@@ -116,6 +118,7 @@ func (kv *KVServer) PutAppend(args *PutAppendArgs, reply *PutAppendReply) {
 	response := kv.serverRaftProcess(putAppendOp)
 	reply.Err = response.Err
 	DPrintf("raft回复%v请求结果:%v", args.Op, reply.Err)
+	return nil
 }
 
 // 请求是否重复
@@ -147,7 +150,7 @@ func (kv *KVServer) serverRaftProcess(commandOp Op) Response {
 
 	// 调用raft的Start函数
 	//DPrintf("[加入新日志]调用raft的Start函数")
-	index, term, isLeader := kv.rf.Start(commandOp)
+	index, term, isLeader := kv.Rf.Start(commandOp)
 
 	// 不是Leader
 	if !isLeader {
@@ -235,11 +238,11 @@ func (kv *KVServer) applier() {
 					}
 				}
 				// raft保存超出最大限制长度，保存快照
-				if kv.maxraftstate != -1 && kv.rf.GetRaftStateSize() > kv.maxraftstate {
+				if kv.maxraftstate != -1 && kv.Rf.GetRaftStateSize() > kv.maxraftstate {
 					kv.raftSnapshot(applyMsg.CommandIndex)
 				}
 				// raft apply的结果返回给raft
-				if currentTerm, isLeader := kv.rf.GetState(); isLeader && currentTerm == applyMsg.CommandTerm {
+				if currentTerm, isLeader := kv.Rf.GetState(); isLeader && currentTerm == applyMsg.CommandTerm {
 					replyCh := kv.getApplyReplyChan(applyMsg.CommandIndex, currentTerm)
 					replyCh <- response
 					DPrintf("结果返回给raft")
@@ -248,7 +251,7 @@ func (kv *KVServer) applier() {
 			} else if applyMsg.SnapshotValid { // 日志压缩开启
 				// 确保快照不发生冲突，实际上由于代码编写一定为true
 				kv.mu.Lock()
-				if kv.rf.CondInstallSnapshot(applyMsg.SnapshotTerm, applyMsg.SnapshotIndex, applyMsg.Snapshot) {
+				if kv.Rf.CondInstallSnapshot(applyMsg.SnapshotTerm, applyMsg.SnapshotIndex, applyMsg.Snapshot) {
 					// 收到raft进行apply的快照，根据index是否需要安装
 					if applyMsg.SnapshotIndex > kv.lastApplied {
 						kv.lastApplied = applyMsg.SnapshotIndex
@@ -274,7 +277,7 @@ func (kv *KVServer) applier() {
 //
 func (kv *KVServer) Kill() {
 	atomic.StoreInt32(&kv.dead, 1)
-	kv.rf.Kill()
+	kv.Rf.Kill()
 	// Your code here, if desired.
 }
 
@@ -297,7 +300,7 @@ func (kv *KVServer) killed() bool {
 // StartKVServer() must return quickly, so it should start goroutines
 // for any long-running work.
 //
-func StartKVServer(servers []network.ClientEnd, me int, persister *raft.Persister, maxraftstate int) *KVServer {
+func StartKVServer(servers []network.ClientEnd, me int, persister persist.Persister, maxraftstate int) *KVServer {
 	// call gob_check.Register on structures you want
 	// Go's RPC library to marshall/unmarshall.
 	gob_check.Register(Op{})
@@ -309,7 +312,7 @@ func StartKVServer(servers []network.ClientEnd, me int, persister *raft.Persiste
 	// You may need initialization code here.
 
 	kv.applyCh = make(chan raft.ApplyMsg)
-	kv.rf = raft.Make(servers, me, persister, kv.applyCh)
+	kv.Rf = raft.Make(servers, me, persister, kv.applyCh)
 
 	// You may need initialization code here.
 	kv.kvMap = make(map[string]string)
@@ -320,7 +323,7 @@ func StartKVServer(servers []network.ClientEnd, me int, persister *raft.Persiste
 
 	// crash后恢复快照
 
-	kv.raftInstallSnapshot(kv.rf.GetSnapshot())
+	kv.raftInstallSnapshot(kv.Rf.GetSnapshot())
 
 	go kv.applier()
 	//go kv. generateSnapshotTask()
@@ -340,7 +343,7 @@ func (kv *KVServer) raftSnapshot(snapshotIndex int) {
 	e.Encode(kv.cliComMap)
 	e.Encode(kv.lastApplied)
 	data := w.Bytes()
-	kv.rf.Snapshot(snapshotIndex, data)
+	kv.Rf.Snapshot(snapshotIndex, data)
 	kv.lastSnapshotIndex = snapshotIndex
 }
 
@@ -357,7 +360,7 @@ func (kv *KVServer) raftInstallSnapshot(snapshot []byte) {
 	} else {
 		kv.kvMap = kvMap
 		kv.cliComMap = cliComMap
-		DPrintf("%v安装快照成功,kvMap:%v, rf.snaplastIndex:%v, cliComMap:%v", kv.me, kv.kvMap, kv.rf.GetSnapshotLastIndex(), kv.cliComMap)
+		DPrintf("%v安装快照成功,kvMap:%v, rf.snaplastIndex:%v, cliComMap:%v", kv.me, kv.kvMap, kv.Rf.GetSnapshotLastIndex(), kv.cliComMap)
 		kv.lastApplied = lastApplied
 	}
 }
@@ -366,7 +369,7 @@ func (kv *KVServer) raftInstallSnapshot(snapshot []byte) {
 func (kv *KVServer) generateSnapshotTask() {
 	for !kv.killed() {
 		kv.mu.Lock()
-		if kv.maxraftstate != -1 && kv.rf.GetRaftStateSize() > kv.maxraftstate && kv.lastApplied > kv.lastSnapshotIndex {
+		if kv.maxraftstate != -1 && kv.Rf.GetRaftStateSize() > kv.maxraftstate && kv.lastApplied > kv.lastSnapshotIndex {
 			DPrintf("保存快照2")
 			kv.raftSnapshot(kv.lastApplied)
 			kv.lastSnapshotIndex = kv.lastApplied

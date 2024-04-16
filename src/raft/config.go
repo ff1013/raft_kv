@@ -14,8 +14,10 @@ import (
 	"math/rand"
 	"raft_kv_backend/gob_check"
 	"raft_kv_backend/network"
+	"raft_kv_backend/persist"
 
 	"raft_kv_backend/labrpc"
+	"raft_kv_backend/leveldb_persist"
 	"runtime"
 	"sync"
 	"sync/atomic"
@@ -51,7 +53,7 @@ type config struct {
 	rafts       []*Raft
 	applyErr    []string // from apply channel readers
 	connected   []bool   // whether each server is on the net
-	saved       []*Persister
+	saved       []persist.Persister
 	endnames    [][]string            // the port file names each sends to
 	logs        []map[int]interface{} // copy of each server's committed entries
 	lastApplied []int
@@ -82,7 +84,7 @@ func make_config(t *testing.T, n int, unreliable bool, snapshot bool) *config {
 	cfg.applyErr = make([]string, cfg.n)
 	cfg.rafts = make([]*Raft, cfg.n)
 	cfg.connected = make([]bool, cfg.n)
-	cfg.saved = make([]*Persister, cfg.n)
+	cfg.saved = make([]persist.Persister, cfg.n)
 	cfg.endnames = make([][]string, cfg.n)
 	cfg.logs = make([]map[int]interface{}, cfg.n)
 	cfg.lastApplied = make([]int, cfg.n)
@@ -137,7 +139,7 @@ func (cfg *config) crash1(i int) {
 	if cfg.saved[i] != nil {
 		raftlog := cfg.saved[i].ReadRaftState()
 		snapshot := cfg.saved[i].ReadSnapshot()
-		cfg.saved[i] = &Persister{}
+		cfg.saved[i] = leveldb_persist.Makeleveldb_persister()
 		cfg.saved[i].SaveStateAndSnapshot(raftlog, snapshot)
 	}
 }
@@ -320,7 +322,7 @@ func (cfg *config) start1(i int, applier func(int, chan ApplyMsg)) {
 			}
 		}
 	} else {
-		cfg.saved[i] = MakePersister()
+		cfg.saved[i] = leveldb_persist.Makeleveldb_persister()
 	}
 
 	cfg.mu.Unlock()

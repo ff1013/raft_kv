@@ -110,9 +110,9 @@ func (rf *Raft) sendInstallSnapshot(server int, args *SnapshotArgs, reply *Snaps
 }
 
 // follower收到leader的同步快照请求
-func (rf *Raft) InstallSnapshot(args *SnapshotArgs, reply *SnapshotReply) {
+func (rf *Raft) InstallSnapshot(args *SnapshotArgs, reply *SnapshotReply) error {
 	if rf.killed() {
-		return 
+		return nil
 	}
 	rf.mu.Lock()
 	defer rf.mu.Unlock()
@@ -127,12 +127,12 @@ func (rf *Raft) InstallSnapshot(args *SnapshotArgs, reply *SnapshotReply) {
 	reply.Term = rf.currentTerm
 	
 	if rf.currentTerm > args.Term {
-		return	
+		return nil
 	}
 
 	// 过期快照
 	if args.LastIncludedIndex < rf.commitIndex || rf.lastLogIndex >= args.LastIncludedIndex{
-		return
+		return nil
 	}
 	
 	// 更新日志，日志变短
@@ -164,11 +164,12 @@ func (rf *Raft) InstallSnapshot(args *SnapshotArgs, reply *SnapshotReply) {
 		SnapshotIndex: rf.lastLogIndex,
 	}
 	if rf.lastApplied > rf.lastLogIndex { // 新增，为保证log consistent，再次检查
-		return
+		return nil
 	}
 	rf.mu.Unlock()
 	rf.applyChan <- msg
 	rf.mu.Lock()
 	rf.overtime = time.Duration(150 + rand.Intn(150)) * time.Millisecond //snapshot RPC也可以重置选举计时
 	rf.timer.Reset(rf.overtime)
+	return nil
 }

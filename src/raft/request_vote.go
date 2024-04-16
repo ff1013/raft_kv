@@ -67,9 +67,9 @@ func (rf *Raft) leaderElection() {
 // example RequestVote RPC handler.
 //
 
-func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
+func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) error {
 	if rf.killed() {
-		return
+		return nil
 	}
 	// Your code here (2A, 2B).
 	rf.mu.Lock()
@@ -83,12 +83,12 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 	//任期Term不相等时，不符合if条件，可以继续向下执行，重新投票给更高Term的竞选者
 	if args.Term == rf.currentTerm &&rf.votedFor != -1 && rf.votedFor != args.CandidateId {
 		SPrintf("节点已经投过票了,投给了: %v",rf.votedFor)
-		return //不投票
+		return nil//不投票
 	}
 
 	if args.Term < rf.currentTerm { //请求者任期小于投票者任期
 		SPrintf("请求者任期小于投票者任期")
-		return //不投票
+		return nil//不投票
 	}
 
 	if args.Term >= rf.currentTerm { //请求者任期大于投票者任期
@@ -107,10 +107,10 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 			SPrintf("竞选者日志最后任期:%v小于投票者日志最后任期:%v", args.LastLogTerm, lastLogTerm)
 			rf.votedFor = -1
 			rf.persist()
-			return //不投票
+			return nil//不投票
 		} else if lastLogTerm == args.LastLogTerm && args.LastLogIndex < rf.logLen() { //等于，但是日志长度短
 			SPrintf("日志最后日期相同但是日志长度短,%v,%v",args.LastLogIndex, rf.logLen())
-			return //不投票
+			return nil//不投票
 		}
 
 		//投票
@@ -122,9 +122,9 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 		reply.Term = args.Term
 		rf.overtime = time.Duration(150 + rand.Intn(150)) * time.Millisecond //随机产生150~300ms
 		rf.timer.Reset(rf.overtime)
-		return
+		return nil
 	}
-
+	return nil
 }
 
 //
