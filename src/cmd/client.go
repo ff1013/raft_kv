@@ -1,10 +1,14 @@
 package main
 
 import (
-	"raft_kv_backend/kvraft"
-	"raft_kv_backend/network"
 	"flag"
 	"fmt"
+	"net/http"
+	"raft_kv_backend/kvraft"
+	"raft_kv_backend/network"
+	"raft_kv_backend/http"
+
+	"github.com/rs/cors"
 )
 
 func main() {
@@ -17,6 +21,21 @@ func main() {
 
 	client := kvraft.MakeClerk(servers)
 
+	// 创建一个带有 CORS 中间件的处理程序
+	c := cors.New(cors.Options{
+		AllowedOrigins: []string{"*"},
+		AllowCredentials: true,
+		AllowedMethods: []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowedHeaders: []string{"Content-Type"},
+	})
+	httpServer := &http.Server{
+		Addr: "127.0.0.1:12100",
+		Handler: c.Handler(&raft_kv_http.KvServer{
+			Client: client,
+		}),
+	}
+	go httpServer.ListenAndServe()
+	
 	for true {
 		fmt.Print("> ")
 		var op string
