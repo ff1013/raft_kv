@@ -121,6 +121,24 @@ func (kv *KVServer) PutAppend(args *PutAppendArgs, reply *PutAppendReply) error 
 	return nil
 }
 
+// delete操作
+func (kv *KVServer) Delete(args *DeleteArgs, reply *DeleteReply) error {
+	DPrintf("[收到Delete请求]server:%v请求key:%v", kv.me, args.Key)
+	// 发往raft参数设置
+	deleteOp := Op{
+		ClientId:  args.ClientId,
+		CommandId: args.CommandId,
+		OpString:  "Delete",
+		Key:       args.Key,
+	}
+	// 调用和下层raft交互函数
+	response := kv.serverRaftProcess(deleteOp)
+	//DPrintf("调用下层函数")
+	reply.Err = response.Err
+	DPrintf("raft回复delete请求结果:%v", reply.Err)
+	return nil
+}
+
 // 请求是否重复
 func (kv *KVServer) isRepeat(op *Op) bool {
 	if command, ok := kv.cliComMap[op.ClientId]; ok {
@@ -230,6 +248,16 @@ func (kv *KVServer) applier() {
 							response = Response{OK, value}
 						} else {
 							DPrintf("[Get请求失败]server:%v, key:%v不存在, kvMap:%v", kv.me, op.Key, kv.kvMap)
+							response = Response{ErrNoKey, ""}
+						}
+					case "Delete":
+						// 遍历检查key是否存在
+						if value, ok := kv.kvMap[op.Key]; ok {
+							delete(kv.kvMap,op.Key)
+							DPrintf("[Delete请求成功]server:%v, key:%v, value:%v, kvMap:%v", kv.me, op.Key, value, kv.kvMap)
+							response = Response{OK, ""}
+						} else {
+							DPrintf("[Delete请求失败]server:%v, key:%v不存在, kvMap:%v", kv.me, op.Key, kv.kvMap)
 							response = Response{ErrNoKey, ""}
 						}
 					}

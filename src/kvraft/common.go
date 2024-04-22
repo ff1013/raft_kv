@@ -36,3 +36,13 @@ type GetReply struct {
 	Err   Err
 	Value string
 }
+
+type DeleteArgs struct {
+	Key string
+	ClientId int64
+	CommandId int64
+}
+
+type DeleteReply struct {
+	Err   Err
+}

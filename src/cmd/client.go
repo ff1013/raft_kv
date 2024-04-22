@@ -36,13 +36,14 @@ func main() {
 	}
 	go httpServer.ListenAndServe()
 	
+	fmt.Print("function: Get、Put、Append、Delete\n")
 	for true {
 		fmt.Print("> ")
 		var op string
 		var key string
 		var value string
 		fmt.Scanf("%s %s", &op, &key)
-		if op != "Get" {
+		if op == "Put" || op == "Append" {
 			fmt.Scanf("%s", &value)
 		}
 
@@ -57,6 +58,10 @@ func main() {
 			res = client.Put(key, value)
 		case "Append":
 			res = client.Append(key, value)
+		case "Delete":
+			res = client.Delete(key)
+		default:
+			res = "There is no such operation, currently supported operations: Get、Put、Append、Delete"
 		}
 		fmt.Println(res)
 	}

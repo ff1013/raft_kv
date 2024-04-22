@@ -123,3 +123,32 @@ func (ck *Clerk) Append(key string, value string) string {
 	// DPrintf("[客户端调用请求]%v请求Append, key:%v, value:%v", ck.clientId, key, value)
 	return ck.PutAppend(key, value, "Append")
 }
+
+// 客户端Delete请求
+func (ck *Clerk) Delete(key string) string {
+	serverNum := len(ck.servers) // 服务器数量
+	ck.lastAppliedCommandId++
+	args := DeleteArgs {
+		Key:       key,
+		ClientId:  ck.clientId,
+		CommandId: ck.lastAppliedCommandId,
+	}
+	DPrintf("[客户端调用请求]%v请求Delete, key:%v commandId:%v", ck.clientId, key, args.CommandId)
+	for serverId := ck.leaderId ; ; serverId = (serverId + 1) % serverNum {
+		reply := DeleteReply {}
+		ok := ck.servers[serverId].Call("KVServer.Delete", &args, &reply)
+		// 发送失败
+		if !ok || reply.Err == ErrWrongLeader || reply.Err == ErrTimeout{
+			// DPrintf("[请求发送失败]")
+			continue
+		}
+		// 发送成功
+		DPrintf("[请求发送成功]")
+		ck.leaderId = serverId
+		ck.lastAppliedCommandId = args.CommandId
+		if reply.Err == ErrNoKey {
+			return ""
+		}
+		return "ok"
+	}
+}
