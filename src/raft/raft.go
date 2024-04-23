@@ -185,9 +185,9 @@ func (rf *Raft) readPersist(data []byte) {
 	var lastLogTerm int
 	if d.Decode(&log) != nil || d.Decode(&currentTerm) != nil || d.Decode(&votedFor) != nil ||
 		d.Decode(&lastLogIndex) != nil || d.Decode(&lastLogTerm) != nil {
-		DPrintf("持久化失败")
+		DPrintf(rf.me, "持久化失败")
 	} else {
-		DPrintf("持久化恢复")
+		DPrintf(rf.me, "持久化恢复")
 		rf.log = log
 		rf.currentTerm = currentTerm
 		rf.votedFor = votedFor
@@ -240,7 +240,7 @@ func (rf *Raft) Start(command interface{}) (int, int, bool) {
 	}
 	index = rf.logLen()
 	term = rf.currentTerm
-	LPrintf("%v追加条目index:%v,term:%v", rf.me, index, term)
+	LPrintf(rf.me, "%v追加条目index:%v,term:%v", rf.me, index, term)
 	// 收到客户端command后立即触发appendEntries()逻辑
 	rf.appendEntries()
 	return index, term, isLeader

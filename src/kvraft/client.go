@@ -32,7 +32,7 @@ func MakeClerk(servers []network.ClientEnd) *Clerk {
 	ck.leaderId = 0 // 初始不知道谁是Leader
 	ck.clientId = nrand()
 	ck.lastAppliedCommandId = 0 // 初始
-	DPrintf("[创建客户端成功] %v", ck.clientId)
+	DPrintf(int(ck.clientId), "[创建客户端成功] %v", ck.clientId)
 	return ck
 }
 
@@ -59,7 +59,7 @@ func (ck *Clerk) Get(key string) string {
 		ClientId:  ck.clientId,
 		CommandId: ck.lastAppliedCommandId,
 	}
-	DPrintf("[客户端调用请求]%v请求Get, key:%v commandId:%v", ck.clientId, key, args.CommandId)
+	DPrintf(int(ck.clientId), "[客户端调用请求]%v请求Get, key:%v commandId:%v", ck.clientId, key, args.CommandId)
 	for serverId := ck.leaderId ; ; serverId = (serverId + 1) % serverNum {
 		reply := GetReply {}
 		ok := ck.servers[serverId].Call("KVServer.Get", &args, &reply)
@@ -69,7 +69,7 @@ func (ck *Clerk) Get(key string) string {
 			continue
 		}
 		// 发送成功
-		DPrintf("[请求发送成功]")
+		DPrintf(int(ck.clientId), "[请求发送成功]")
 		ck.leaderId = serverId
 		ck.lastAppliedCommandId = args.CommandId
 		if reply.Err == ErrNoKey {
@@ -100,7 +100,7 @@ func (ck *Clerk) PutAppend(key string, value string, op string) string {
 		ClientId: ck.clientId,
 		CommandId: ck.lastAppliedCommandId,
 	}
-	DPrintf("[客户端调用请求]%v请求%v, key:%v, value:%v, commandId:%v", ck.clientId, args.Op, key, value, args.CommandId)
+	DPrintf(int(ck.clientId), "[客户端调用请求]%v请求%v, key:%v, value:%v, commandId:%v", ck.clientId, args.Op, key, value, args.CommandId)
 	for serverId := ck.leaderId ; ; serverId = (serverId + 1) % serverNum {
 		reply := PutAppendReply {}
 		ok := ck.servers[serverId].Call("KVServer.PutAppend", &args, &reply)
@@ -133,7 +133,7 @@ func (ck *Clerk) Delete(key string) string {
 		ClientId:  ck.clientId,
 		CommandId: ck.lastAppliedCommandId,
 	}
-	DPrintf("[客户端调用请求]%v请求Delete, key:%v commandId:%v", ck.clientId, key, args.CommandId)
+	DPrintf(int(ck.clientId), "[客户端调用请求]%v请求Delete, key:%v commandId:%v", ck.clientId, key, args.CommandId)
 	for serverId := ck.leaderId ; ; serverId = (serverId + 1) % serverNum {
 		reply := DeleteReply {}
 		ok := ck.servers[serverId].Call("KVServer.Delete", &args, &reply)
@@ -143,7 +143,7 @@ func (ck *Clerk) Delete(key string) string {
 			continue
 		}
 		// 发送成功
-		DPrintf("[请求发送成功]")
+		DPrintf(int(ck.clientId),"[请求发送成功]")
 		ck.leaderId = serverId
 		ck.lastAppliedCommandId = args.CommandId
 		if reply.Err == ErrNoKey {

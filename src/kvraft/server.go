@@ -2,7 +2,9 @@ package kvraft
 
 import (
 	"bytes"
+	"fmt"
 	"log"
+	"os"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -15,9 +17,22 @@ import (
 
 const Debug = false
 
-func DPrintf(format string, a ...interface{}) (n int, err error) {
+func DPrintf(id int, format string, a ...interface{}) (n int, err error) {
 	if Debug {
-		log.Printf(format, a...)
+		// 输出日志到文件中
+		// 输出日志到文件中
+		logFileName := fmt.Sprintf("kvraft_%d.log", id)
+		logFile, err := os.OpenFile(logFileName, os.O_CREATE | os.O_WRONLY | os.O_APPEND, 0666)
+		if err != nil {
+			log.Fatalf("打开日志文件失败：%v", err)
+		}
+		defer logFile.Close()
+
+		// 创建一个新的log.Logger实例
+		logger := log.New(logFile, "", log.LstdFlags)
+
+		// 使用logger.Printf(format, a...)
+		logger.Printf(format, a...)
 	}
 	return
 }
@@ -83,7 +98,7 @@ func (kv *KVServer) getApplyReplyChan(index int, term int) chan Response {
 
 // get操作
 func (kv *KVServer) Get(args *GetArgs, reply *GetReply) error {
-	DPrintf("[收到Get请求]server:%v请求key:%v", kv.me, args.Key)
+	DPrintf(kv.me, "[收到Get请求]server:%v请求key:%v", kv.me, args.Key)
 	// Your code here.
 	// 发往raft参数设置
 	getOp := Op{
@@ -97,7 +112,7 @@ func (kv *KVServer) Get(args *GetArgs, reply *GetReply) error {
 	response := kv.serverRaftProcess(getOp)
 	//DPrintf("调用下层函数")
 	reply.Err, reply.Value = response.Err, response.Value
-	DPrintf("raft回复get请求结果:%v", reply.Value)
+	DPrintf(kv.me, "raft回复get请求结果:%v", reply.Value)
 	return nil
 }
 
@@ -105,7 +120,7 @@ func (kv *KVServer) Get(args *GetArgs, reply *GetReply) error {
 func (kv *KVServer) PutAppend(args *PutAppendArgs, reply *PutAppendReply) error {
 	// Your code here.
 	// 发往raft参数设置
-	DPrintf("[收到%v请求]server:%v请求key:%v, value:%v, commandId:%v", args.Op, kv.me, args.Key, args.Value, args.CommandId)
+	DPrintf(kv.me, "[收到%v请求]server:%v请求key:%v, value:%v, commandId:%v", args.Op, kv.me, args.Key, args.Value, args.CommandId)
 	putAppendOp := Op{
 		ClientId:  args.ClientId,
 		CommandId: args.CommandId,
@@ -117,13 +132,13 @@ func (kv *KVServer) PutAppend(args *PutAppendArgs, reply *PutAppendReply) error 
 	// 调用和下层raft交互函数
 	response := kv.serverRaftProcess(putAppendOp)
 	reply.Err = response.Err
-	DPrintf("raft回复%v请求结果:%v", args.Op, reply.Err)
+	DPrintf(kv.me, "raft回复%v请求结果:%v", args.Op, reply.Err)
 	return nil
 }
 
 // delete操作
 func (kv *KVServer) Delete(args *DeleteArgs, reply *DeleteReply) error {
-	DPrintf("[收到Delete请求]server:%v请求key:%v", kv.me, args.Key)
+	DPrintf(kv.me, "[收到Delete请求]server:%v请求key:%v", kv.me, args.Key)
 	// 发往raft参数设置
 	deleteOp := Op{
 		ClientId:  args.ClientId,
@@ -135,7 +150,7 @@ func (kv *KVServer) Delete(args *DeleteArgs, reply *DeleteReply) error {
 	response := kv.serverRaftProcess(deleteOp)
 	//DPrintf("调用下层函数")
 	reply.Err = response.Err
-	DPrintf("raft回复delete请求结果:%v", reply.Err)
+	DPrintf(kv.me, "raft回复delete请求结果:%v", reply.Err)
 	return nil
 }
 
@@ -143,7 +158,7 @@ func (kv *KVServer) Delete(args *DeleteArgs, reply *DeleteReply) error {
 func (kv *KVServer) isRepeat(op *Op) bool {
 	if command, ok := kv.cliComMap[op.ClientId]; ok {
 		if command.CommandId >= op.CommandId {
-			DPrintf("%v的%v请求重复发送测试:op.CommandId:%v, command:%v", kv.me, op, op.CommandId, command)
+			DPrintf(kv.me, "%v的%v请求重复发送测试:op.CommandId:%v, command:%v", kv.me, op, op.CommandId, command)
 			//若当前的请求已经被执行过了
 			return true
 		}
@@ -161,7 +176,7 @@ func (kv *KVServer) serverRaftProcess(commandOp Op) Response {
 		kv.mu.Unlock()
 		response.Err = "OK"
 		response.Value = ""
-		DPrintf("put/append请求重复发送")
+		DPrintf(kv.me, "put/append请求重复发送")
 		return response
 	}
 	kv.mu.Unlock()
@@ -196,10 +211,10 @@ func (kv *KVServer) serverRaftProcess(commandOp Op) Response {
 	case replyMsg := <-replyCh:
 		//if response.
 		response.Err, response.Value = replyMsg.Err, replyMsg.Value
-		DPrintf("[收到raft写入日志回复]%v", response.Err)
+		DPrintf(kv.me, "[收到raft写入日志回复]%v", response.Err)
 		return response
 	case <-time.After(100 * time.Millisecond):
-		DPrintf("[失败]:%v处理%v请求超时", kv.me, commandOp)
+		DPrintf(kv.me, "[失败]:%v处理%v请求超时", kv.me, commandOp)
 		response.Err = ErrTimeout
 		return response
 	}
@@ -214,9 +229,9 @@ func (kv *KVServer) applier() {
 			if applyMsg.CommandValid { // 日志压缩关闭
 				//DPrintf("[日志压缩关闭]")
 				kv.mu.Lock()
-				DPrintf("[检查msg过期]applyMsg.CommandIndex:%v,kv.lastApplied:%v", applyMsg.CommandIndex, kv.lastApplied)
+				DPrintf(kv.me, "[检查msg过期]applyMsg.CommandIndex:%v,kv.lastApplied:%v", applyMsg.CommandIndex, kv.lastApplied)
 				if applyMsg.CommandIndex <= kv.lastApplied { // 比lastApplied还小，说明msg过期
-					DPrintf("[apply失败]过期msg, msg的index:%v, lastApplied:%v", applyMsg.CommandIndex, kv.lastApplied)
+					DPrintf(kv.me, "[apply失败]过期msg, msg的index:%v, lastApplied:%v", applyMsg.CommandIndex, kv.lastApplied)
 					kv.mu.Unlock()
 					continue
 				}
@@ -227,7 +242,7 @@ func (kv *KVServer) applier() {
 				var response Response
 				op := applyMsg.Command.(Op)                   // 将command转换成Op格式
 				if op.OpString != "Get" && kv.isRepeat(&op) { // put/append检查是否重复请求
-					DPrintf("put/append请求重复发送")
+					DPrintf(kv.me, "put/append请求重复发送")
 					response = kv.cliComMap[op.ClientId].CommandReply // 上次回复结果
 				} else {
 					// kv.cliComMap[op.ClientId] = op.CommandId // 更新ClientId[CommandId]的Map
@@ -236,28 +251,28 @@ func (kv *KVServer) applier() {
 						// DPrintf("test,%v",op.OpString)
 						kv.kvMap[op.Key] = op.Value
 						response = Response{OK, ""}
-						DPrintf("[Put请求成功]server:%v, key:%v, value:%v, kvMap:%v", kv.me, op.Key, op.Value, kv.kvMap)
+						DPrintf(kv.me, "[Put请求成功]server:%v, key:%v, value:%v, kvMap:%v", kv.me, op.Key, op.Value, kv.kvMap)
 					case "Append":
 						kv.kvMap[op.Key] += op.Value
 						response = Response{OK, ""}
-						DPrintf("[Append请求成功]server:%v, key:%v, value:%v, kvMap:%v", kv.me, op.Key, kv.kvMap[op.Key], kv.kvMap)
+						DPrintf(kv.me, "[Append请求成功]server:%v, key:%v, value:%v, kvMap:%v", kv.me, op.Key, kv.kvMap[op.Key], kv.kvMap)
 					case "Get":
 						// 遍历检查key是否存在
 						if value, ok := kv.kvMap[op.Key]; ok {
-							DPrintf("[Get请求成功]server:%v, key:%v, value:%v, kvMap:%v", kv.me, op.Key, value, kv.kvMap)
+							DPrintf(kv.me, "[Get请求成功]server:%v, key:%v, value:%v, kvMap:%v", kv.me, op.Key, value, kv.kvMap)
 							response = Response{OK, value}
 						} else {
-							DPrintf("[Get请求失败]server:%v, key:%v不存在, kvMap:%v", kv.me, op.Key, kv.kvMap)
+							DPrintf(kv.me, "[Get请求失败]server:%v, key:%v不存在, kvMap:%v", kv.me, op.Key, kv.kvMap)
 							response = Response{ErrNoKey, ""}
 						}
 					case "Delete":
 						// 遍历检查key是否存在
 						if value, ok := kv.kvMap[op.Key]; ok {
 							delete(kv.kvMap,op.Key)
-							DPrintf("[Delete请求成功]server:%v, key:%v, value:%v, kvMap:%v", kv.me, op.Key, value, kv.kvMap)
+							DPrintf(kv.me, "[Delete请求成功]server:%v, key:%v, value:%v, kvMap:%v", kv.me, op.Key, value, kv.kvMap)
 							response = Response{OK, ""}
 						} else {
-							DPrintf("[Delete请求失败]server:%v, key:%v不存在, kvMap:%v", kv.me, op.Key, kv.kvMap)
+							DPrintf(kv.me, "[Delete请求失败]server:%v, key:%v不存在, kvMap:%v", kv.me, op.Key, kv.kvMap)
 							response = Response{ErrNoKey, ""}
 						}
 					}
@@ -273,7 +288,7 @@ func (kv *KVServer) applier() {
 				if currentTerm, isLeader := kv.Rf.GetState(); isLeader && currentTerm == applyMsg.CommandTerm {
 					replyCh := kv.getApplyReplyChan(applyMsg.CommandIndex, currentTerm)
 					replyCh <- response
-					DPrintf("结果返回给raft")
+					DPrintf(kv.me, "结果返回给raft")
 				}
 				kv.mu.Unlock()
 			} else if applyMsg.SnapshotValid { // 日志压缩开启
@@ -283,7 +298,7 @@ func (kv *KVServer) applier() {
 					// 收到raft进行apply的快照，根据index是否需要安装
 					if applyMsg.SnapshotIndex > kv.lastApplied {
 						kv.lastApplied = applyMsg.SnapshotIndex
-						DPrintf("保存快照1")
+						DPrintf(kv.me, "保存快照1")
 						kv.raftInstallSnapshot(applyMsg.Snapshot) // 安装快照
 					}
 				}
@@ -356,15 +371,15 @@ func StartKVServer(servers []network.ClientEnd, me int, persister persist.Persis
 	go kv.applier()
 	//go kv. generateSnapshotTask()
 
-	DPrintf("[创建server成功] %v", kv.me)
-	DPrintf("kv.lastApplied:%v", kv.lastApplied)
+	DPrintf(kv.me, "[创建server成功] %v", kv.me)
+	DPrintf(kv.me, "kv.lastApplied:%v", kv.lastApplied)
 
 	return kv
 }
 
 // 调用raft保存快照
 func (kv *KVServer) raftSnapshot(snapshotIndex int) {
-	DPrintf("%v保存快照, kvMap:%v, cliComMap:%v", kv.me, kv.kvMap, kv.cliComMap)
+	DPrintf(kv.me, "%v保存快照, kvMap:%v, cliComMap:%v", kv.me, kv.kvMap, kv.cliComMap)
 	w := new(bytes.Buffer)
 	e := gob_check.NewEncoder(w)
 	e.Encode(kv.kvMap)
@@ -384,11 +399,11 @@ func (kv *KVServer) raftInstallSnapshot(snapshot []byte) {
 	var lastApplied int
 
 	if d.Decode(&kvMap) != nil || d.Decode(&cliComMap) != nil || d.Decode(&lastApplied) != nil {
-		DPrintf("安装快照失败")
+		DPrintf(kv.me, "安装快照失败")
 	} else {
 		kv.kvMap = kvMap
 		kv.cliComMap = cliComMap
-		DPrintf("%v安装快照成功,kvMap:%v, rf.snaplastIndex:%v, cliComMap:%v", kv.me, kv.kvMap, kv.Rf.GetSnapshotLastIndex(), kv.cliComMap)
+		DPrintf(kv.me, "%v安装快照成功,kvMap:%v, rf.snaplastIndex:%v, cliComMap:%v", kv.me, kv.kvMap, kv.Rf.GetSnapshotLastIndex(), kv.cliComMap)
 		kv.lastApplied = lastApplied
 	}
 }
@@ -398,7 +413,7 @@ func (kv *KVServer) generateSnapshotTask() {
 	for !kv.killed() {
 		kv.mu.Lock()
 		if kv.maxraftstate != -1 && kv.Rf.GetRaftStateSize() > kv.maxraftstate && kv.lastApplied > kv.lastSnapshotIndex {
-			DPrintf("保存快照2")
+			DPrintf(kv.me, "保存快照2")
 			kv.raftSnapshot(kv.lastApplied)
 			kv.lastSnapshotIndex = kv.lastApplied
 		}

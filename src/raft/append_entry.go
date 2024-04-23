@@ -40,8 +40,8 @@ func (rf *Raft) appendEntries() {
 				Data:				rf.persister.ReadSnapshot(),
 			}
 			reply := SnapshotReply{}
-			CPrintf("rf.nextIndex[i]:%v, rf.lastLogIndex:%v", rf.nextIndex[i], rf.lastLogIndex)
-			CPrintf("%v同步日志快照到%v", rf.me, i)
+			CPrintf(rf.me, "rf.nextIndex[i]:%v, rf.lastLogIndex:%v", rf.nextIndex[i], rf.lastLogIndex)
+			CPrintf(rf.me, "%v同步日志快照到%v", rf.me, i)
 			go rf.sendInstallSnapshot(i, &args, &reply)
 			continue
 		}
@@ -72,10 +72,10 @@ func (rf *Raft) appendEntries() {
 		}
 		
 		if len(args.Entries) != 0 {
-			LPrintf("Leader%v发送同步日志请求给%v",rf.me,i)
-			LPrintf("[附加日志请求为] arg:%+v\n", args)
+			LPrintf(rf.me, "Leader%v发送同步日志请求给%v", rf.me, i)
+			LPrintf(rf.me, "[附加日志请求为] arg:%+v\n", args) 
 		} else {
-			LPrintf("Leader%v发送心跳给%v",rf.me,i)
+			LPrintf(rf.me, "Leader%v发送心跳给%v",rf.me,i)
 		}
 		reply := AppendEntriesReply{}
 		go rf.sendAppendEntries(i, &args, &reply)
@@ -90,11 +90,11 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 	defer rf.mu.Unlock()
 
 	reply.Success = false
-	LPrintf("[%v收到AE消息]日志长度:%v arg:%+v,----rf.log:%v \n", rf.me,  rf.logLen(), args, rf.log)
+	LPrintf(rf.me, "[%v收到AE消息]日志长度:%v arg:%+v,----rf.log:%v \n", rf.me,  rf.logLen(), args, rf.log)
 	if rf.currentTerm > args.Term { //发来的Leader已经过期了
 		reply.Term = rf.currentTerm
 		reply.Success = false
-		LPrintf("[%v认为Leader过期了]此时%v的任期是%v,发来的Leader%v任期是:%v",rf.me,rf.me,rf.currentTerm,args.LeaderId,args.Term)
+		LPrintf(rf.me, "[%v认为Leader过期了]此时%v的任期是%v,发来的Leader%v任期是:%v",rf.me,rf.me,rf.currentTerm,args.LeaderId,args.Term)
 		return nil
 	}
 
@@ -121,14 +121,14 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 	//有空白槽或前置任期不一致
 		reply.Term = rf.currentTerm
 		reply.Success = false //不同意附加
-		LPrintf("[不同意加日志]%v不同意附加新的日志",rf.me)
+		LPrintf(rf.me, "[不同意加日志]%v不同意附加新的日志",rf.me)
 
 		//快速更新相关
 		//有空白槽
 		if args.PrevLogIndex > rf.logLen() {
 			reply.XTerm = -1 //XTerm:冲突的任期号,-1表示为空
 			reply.XLen = rf.logLen() + 1 //XLen:如果XTerm=-1出现空白槽时,开始加的位置
-			LPrintf("[快速更新]有空白槽, XLen:%v", reply.XLen)
+			LPrintf(rf.me, "[快速更新]有空白槽, XLen:%v", reply.XLen)
 		} else {
 		//前置任期不一致
 			reply.XTerm = prevLogTerm
@@ -136,7 +136,7 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 			for reply.XIndex > 1 && reply.XIndex - 1 > rf.lastLogIndex && rf.getLogByIndex(reply.XIndex).Term == rf.getLogByIndex(reply.XIndex - 1).Term {
 				reply.XIndex-- //找到第一条
 			}
-			LPrintf("[快速更新]前置日志任期不一致")
+			LPrintf(rf.me, "[快速更新]前置日志任期不一致")
 		}
 		return nil
 	} else { 
@@ -144,16 +144,16 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 		if len(args.Entries) != 0 { // 不是心跳
 			for index, entry := range args.Entries {
 				if entry.Index <= rf.logLen() && rf.getLogByIndex(entry.Index).Term != entry.Term {
-					LPrintf("原日志长度:%v", rf.logLen())
+					LPrintf(rf.me, "原日志长度:%v", rf.logLen())
 					rf.log = rf.cutLogEnd(entry.Index)
 					rf.persist()
-					LPrintf("截取后日志长度:%v", rf.logLen())
+					LPrintf(rf.me, "截取后日志长度:%v", rf.logLen())
 				}
 				if entry.Index > rf.logLen() {
-					LPrintf("原日志长度:%v", rf.logLen())
+					LPrintf(rf.me, "原日志长度:%v", rf.logLen())
 					rf.appendLog(args.Entries[index:])
 					rf.persist()
-					LPrintf("附加后日志长度:%v", rf.logLen())
+					LPrintf(rf.me, "附加后日志长度:%v", rf.logLen())
 					break
 				}
 			}
@@ -162,9 +162,9 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 		reply.Term = rf.currentTerm
 		
 		if len(args.Entries) == 0 {
-			LPrintf("%v返回心跳",rf.me)
+			LPrintf(rf.me, "%v返回心跳",rf.me)
 		} else {
-			LPrintf("%v返回AE消息,成功同步日志,同步日志的index:%v,term:%v", rf.me, args.PrevLogIndex+1, args.Entries[0].Term)
+			LPrintf(rf.me, "%v返回AE消息,成功同步日志,同步日志的index:%v,term:%v", rf.me, args.PrevLogIndex+1, args.Entries[0].Term)
 		}
 		if rf.commitIndex < args.LeaderCommit {
 			rf.commitIndex = min(rf.logLen(), args.LeaderCommit)
@@ -172,7 +172,7 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 		}
 		reply.Success = true
 		if len(args.Entries) != 0 {
-			LPrintf("[%v成功附加日志] arg:%+v,----rf.logs:%v \n", rf.me, args, rf.log)
+			LPrintf(rf.me, "[%v成功附加日志] arg:%+v,----rf.logs:%v \n", rf.me, args, rf.log)
 		}
 	}
 	return nil
@@ -186,7 +186,7 @@ func (rf *Raft) sendAppendEntries(server int, args *AppendEntriesArgs, reply *Ap
 	for !ok {
 		return false
 	}
-	LPrintf("%v发送AE消息给%v,%v返回结果：%v",rf.me,server,server,reply.Success)
+	LPrintf(rf.me, "%v发送AE消息给%v,%v返回结果：%v",rf.me,server,server,reply.Success)
 
 	rf.mu.Lock()
 	defer rf.mu.Unlock()
@@ -202,7 +202,7 @@ func (rf *Raft) sendAppendEntries(server int, args *AppendEntriesArgs, reply *Ap
 		rf.votedFor = -1 //更新投票相关
 		rf.persist()
 		rf.votedmeNum = 0
-		LPrintf("%v由Leader转变为Follower",rf.me)
+		LPrintf(rf.me, "%v由Leader转变为Follower",rf.me)
 		return ok
 	}
 
@@ -211,12 +211,12 @@ func (rf *Raft) sendAppendEntries(server int, args *AppendEntriesArgs, reply *Ap
 	}
 
 	if reply.Success == false {
-		LPrintf("%v节点不同意附加日志",server)
+		LPrintf(rf.me, "%v节点不同意附加日志",server)
 		if reply.Term != 0 { //回复不是心跳
-			LPrintf("快速更新相关:reply:%+v",reply)
+			LPrintf(rf.me, "快速更新相关:reply:%+v",reply)
 			if reply.XTerm == -1 { //空白槽
 				rf.nextIndex[server] = reply.XLen
-				LPrintf("快速更新rf.nextIndex[server]:%v",rf.nextIndex[server])
+				LPrintf(rf.me, "快速更新rf.nextIndex[server]:%v",rf.nextIndex[server])
 				if(rf.nextIndex[server] > 0) {
 					args.PrevLogIndex =  rf.nextIndex[server] - 1
 				}
@@ -229,11 +229,11 @@ func (rf *Raft) sendAppendEntries(server int, args *AppendEntriesArgs, reply *Ap
 				if(rf.nextIndex[server] > 0) {
 					args.Entries = rf.cutLogFrom(rf.nextIndex[server])
 				}
-				LPrintf("快速更新AE消息:%+v",args)
+				LPrintf(rf.me, "快速更新AE消息:%+v",args)
 				reply := AppendEntriesReply{}
 				go rf.sendAppendEntries(server, args, &reply)
 			} else { // 前置任期不一致
-				LPrintf("test:rf.nextIndex[server]:%v",rf.nextIndex[server])
+				LPrintf(rf.me, "test:rf.nextIndex[server]:%v",rf.nextIndex[server])
 				if reply.XIndex <= rf.lastLogIndex { // 要同步的已被快照保存
 					if reply.XIndex <= rf.lastLogIndex && rf.lastLogIndex != 0{ 
 						arg := SnapshotArgs{
@@ -253,12 +253,12 @@ func (rf *Raft) sendAppendEntries(server int, args *AppendEntriesArgs, reply *Ap
 				} else {
 					rf.nextIndex[server] = reply.XIndex + 1
 				}
-				LPrintf("快速更新rf.nextIndex[server]:%v",rf.nextIndex[server])
+				LPrintf(rf.me, "快速更新rf.nextIndex[server]:%v",rf.nextIndex[server])
 				if(rf.nextIndex[server] > 0) {
 					args.PrevLogIndex =  rf.nextIndex[server] - 1
 				}
 				if args.PrevLogIndex > 0 {
-					CPrintf("test:args.PrevLogIndex:%v, 日志现长:%v, 日志总长:%v", args.PrevLogIndex, len(rf.log), rf.logLen())
+					CPrintf(rf.me, "test:args.PrevLogIndex:%v, 日志现长:%v, 日志总长:%v", args.PrevLogIndex, len(rf.log), rf.logLen())
 					if args.PrevLogIndex == rf.lastLogIndex {
 						args.PrevLogTerm = rf.lastLogTerm
 					} else {
@@ -268,7 +268,7 @@ func (rf *Raft) sendAppendEntries(server int, args *AppendEntriesArgs, reply *Ap
 				if(rf.nextIndex[server] > 0) {
 					args.Entries = rf.cutLogFrom(rf.nextIndex[server])
 				}
-				LPrintf("快速更新AE消息:%+v",args)
+				LPrintf(rf.me, "快速更新AE消息:%+v",args)
 				reply := AppendEntriesReply{}
 				go rf.sendAppendEntries(server, args, &reply)
 			}
@@ -300,7 +300,7 @@ func (rf *Raft) sendAppendEntries(server int, args *AppendEntriesArgs, reply *Ap
 
 func (rf *Raft) apply() {
 	rf.applyCond.Broadcast()
-	LPrintf("[%v]: rf.applyCond.Broadcast()", rf.me)
+	LPrintf(rf.me, "[%v]: rf.applyCond.Broadcast()", rf.me)
 }
 
 func (rf *Raft) applier() {
@@ -308,7 +308,7 @@ func (rf *Raft) applier() {
 		rf.mu.Lock()
 		for rf.lastApplied >= rf.commitIndex {
 			rf.applyCond.Wait()
-			LPrintf("[%v]: rf.applyCond.Wait()", rf.me)
+			LPrintf(rf.me, "[%v]: rf.applyCond.Wait()", rf.me)
 		}
 		if rf.lastApplied > rf.logLen() {
 			rf.mu.Unlock()

@@ -13,7 +13,7 @@ func (rf *Raft) logLen() int {
 
 // index对应日志
 func (rf *Raft) getLogByIndex(index int) LogEntry{
-	DPrintf("[getLogByIndex]:index:%v, rf.lastLogIndex:%v, len(rf.log):%v", index, rf.lastLogIndex, len(rf.log))
+	DPrintf(rf.me, "[getLogByIndex]:index:%v, rf.lastLogIndex:%v, len(rf.log):%v", index, rf.lastLogIndex, len(rf.log))
 	return rf.log[index - rf.lastLogIndex - 1]
 	
 }

@@ -59,18 +59,18 @@ func (rf *Raft) Snapshot(index int, snapshot []byte) {
 		return 
 	}
 
-	CPrintf("更新快照")
+	CPrintf(rf.me, "更新快照")
 	// 更新快照
 	lastLogTerm := rf.getLogByIndex(index).Term
 
-	CPrintf("%v日志保存为快照前,日志长度:%v,rf.lastLogIndex:%v",rf.me, len(rf.log), rf.lastLogIndex)
+	CPrintf(rf.me, "%v日志保存为快照前,日志长度:%v,rf.lastLogIndex:%v",rf.me, len(rf.log), rf.lastLogIndex)
 	rf.log = rf.cutLogFrom(index + 1)
 	rf.log = append([]LogEntry{}, rf.log...) // 垃圾回收
-	CPrintf("%v日志保存为快照后,日志长度:%v,rf.lastLogIndex:%v",rf.me, len(rf.log), index)
+	CPrintf(rf.me, "%v日志保存为快照后,日志长度:%v,rf.lastLogIndex:%v",rf.me, len(rf.log), index)
 	// 更新最新快照相关
 	rf.lastLogIndex = index
 	rf.lastLogTerm = lastLogTerm
-	CPrintf("%v更新快照相关:rf.lastLogIndex:%v, rf.lastLogTerm:%v",rf.me, rf.lastLogIndex, rf.lastLogTerm)
+	CPrintf(rf.me, "%v更新快照相关:rf.lastLogIndex:%v, rf.lastLogTerm:%v",rf.me, rf.lastLogIndex, rf.lastLogTerm)
 
 
 	// 更新commitIndex、lastApplied
@@ -88,7 +88,7 @@ func (rf *Raft) sendInstallSnapshot(server int, args *SnapshotArgs, reply *Snaps
 		return 
 	}
 	ok := rf.peers[server].Call("Raft.InstallSnapshot", args, reply)
-	CPrintf("%v同步快照给%v", rf.me, server)
+	CPrintf(rf.me, "%v同步快照给%v", rf.me, server)
 	for !ok {
 		return 
 	}
@@ -101,7 +101,7 @@ func (rf *Raft) sendInstallSnapshot(server int, args *SnapshotArgs, reply *Snaps
 		rf.votedFor = -1 //更新投票相关
 		rf.persist()
 		rf.votedmeNum = 0
-		CPrintf("%v由Leader转变为Follower",rf.me)
+		CPrintf(rf.me, "%v由Leader转变为Follower",rf.me)
 	}
 
 	// 更新nextIndex、matchIndex
@@ -136,7 +136,7 @@ func (rf *Raft) InstallSnapshot(args *SnapshotArgs, reply *SnapshotReply) error 
 	}
 	
 	// 更新日志，日志变短
-	CPrintf("%v同步更新快照前,日志长度:%v,rf.lastLogIndex:%v",rf.me, len(rf.log), rf.lastLogIndex)
+	CPrintf(rf.me, "%v同步更新快照前,日志长度:%v,rf.lastLogIndex:%v",rf.me, len(rf.log), rf.lastLogIndex)
 	// len(rf.log):1 rf.lastLogIndex:0 args.LastIncludedInde:9 rf.getlastLogIndex():1
 	// rf.logLen():1
 	if rf.logLen() >= rf.lastLogIndex && args.LastIncludedIndex <= rf.getlastLogIndex() {
@@ -144,11 +144,11 @@ func (rf *Raft) InstallSnapshot(args *SnapshotArgs, reply *SnapshotReply) error 
 	}else if rf.logLen() < args.LastIncludedIndex {
 		rf.log = []LogEntry{}
 	}
-	CPrintf("%v同步更新快照后,日志长度:%v,rf.lastLogIndex:%v",rf.me, len(rf.log), args.LastIncludedIndex)
+	CPrintf(rf.me, "%v同步更新快照后,日志长度:%v,rf.lastLogIndex:%v",rf.me, len(rf.log), args.LastIncludedIndex)
 	// 更新最新快照相关
 	rf.lastLogIndex = args.LastIncludedIndex
 	rf.lastLogTerm = args.LastIncludedTerm
-	CPrintf("%v更新快照相关:rf.lastLogIndex:%v, rf.lastLogTerm:%v",rf.me, rf.lastLogIndex, rf.lastLogTerm)
+	CPrintf(rf.me, "%v更新快照相关:rf.lastLogIndex:%v, rf.lastLogTerm:%v",rf.me, rf.lastLogIndex, rf.lastLogTerm)
 	rf.persist()
 	rf.persister.SaveStateAndSnapshot(rf.persistData(), args.Data)
 
