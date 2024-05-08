@@ -53,6 +53,7 @@ import (
 	"bytes"
 	"log"
 	"math/rand"
+	"raft_kv_backend/network"
 	"raft_kv_backend/gob_check"
 	"reflect"
 	"strings"
@@ -129,7 +130,7 @@ type Network struct {
 	reliable       bool
 	longDelays     bool                        // pause a long time on send on disabled connection
 	longReordering bool                        // sometimes delay replies a long time
-	ends           map[interface{}]*ClientEnd  // ends, by name
+	ends           map[interface{}]network.ClientEnd  // ends, by name
 	enabled        map[interface{}]bool        // by end name
 	servers        map[interface{}]*Server     // servers, by name
 	connections    map[interface{}]interface{} // endname -> servername
@@ -142,7 +143,7 @@ type Network struct {
 func MakeNetwork() *Network {
 	rn := &Network{}
 	rn.reliable = true
-	rn.ends = map[interface{}]*ClientEnd{}
+	rn.ends = map[interface{}]network.ClientEnd{}
 	rn.enabled = map[interface{}]bool{}
 	rn.servers = map[interface{}]*Server{}
 	rn.connections = map[interface{}](interface{}){}
@@ -312,7 +313,7 @@ func (rn *Network) processReq(req reqMsg) {
 
 // create a client end-point.
 // start the thread that listens and delivers.
-func (rn *Network) MakeEnd(endname interface{}) *ClientEnd {
+func (rn *Network) MakeEnd(endname interface{}) network.ClientEnd {
 	rn.mu.Lock()
 	defer rn.mu.Unlock()
 
@@ -465,7 +466,7 @@ func MakeService(rcvr interface{}) *Service {
 			mtype.NumIn() != 3 ||
 			//mtype.In(1).Kind() != reflect.Ptr ||
 			mtype.In(2).Kind() != reflect.Ptr ||
-			mtype.NumOut() != 0 {
+			mtype.NumOut() != 1 {
 			// the method is not suitable for a handler
 			//fmt.Printf("bad method: %v\n", mname)
 		} else {
